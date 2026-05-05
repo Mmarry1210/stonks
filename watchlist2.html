@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Watchlist</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d14;
+    --surface: #16161f;
+    --surface2: #1c1c28;
+    --border: #2a2a3d;
+    --accent: #00e87a;
+    --accent-dim: rgba(0,232,122,0.1);
+    --accent-mid: rgba(0,232,122,0.25);
+    --text: #f0f0f8;
+    --text2: #a0a0b8;
+    --up: #00e87a;
+    --down: #ff5070;
+    --up-bg: rgba(0,232,122,0.1);
+    --down-bg: rgba(255,80,112,0.1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 36px 20px 60px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 32px;
+  }
+  .header-left h1 { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+  .header-left .sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--accent-dim); border: 1px solid var(--accent-mid);
+    border-radius: 20px; padding: 5px 12px;
+    font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: .04em;
+  }
+  .dot { width:7px;height:7px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .refresh-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+    border-radius: 8px; padding: 6px 14px; font-family: 'Inter',sans-serif;
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: color .15s, border-color .15s;
+  }
+  .refresh-btn:hover { color: var(--text); border-color: #444; }
+
+  .total-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 24px 28px; margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+  }
+  .total-label { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .total-value { font-family: 'JetBrains Mono',monospace; font-size: 38px; font-weight: 600; color: var(--text); letter-spacing: -1px; line-height: 1; }
+  .total-status { font-size: 13px; color: var(--text2); margin-top: 6px; }
+  .total-change-block { text-align: right; }
+  .total-change { font-family: 'JetBrains Mono',monospace; font-size: 20px; font-weight: 600; line-height: 1; }
+  .total-change-label { font-size: 12px; color: var(--text2); margin-top: 5px; }
+
+  /* ── Column header (desktop only) ── */
+  .col-header { display: grid; grid-template-columns: 1.8fr 1.1fr 0.9fr 1fr 1fr; gap: 12px; padding: 0 20px; margin-bottom: 6px; }
+  .col-header span { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; }
+  .col-header span:nth-child(2), .col-header span:nth-child(3), .col-header span:nth-child(4) { text-align: center; }
+  .col-header span:nth-child(5) { text-align: right; }
+
+  /* ── Cards ── */
+  .grid { display: grid; gap: 8px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; display: grid;
+    grid-template-columns: 1.8fr 1.1fr 0.9fr 1fr 1fr;
+    align-items: center; gap: 12px;
+    transition: border-color .15s, background .15s; animation: fadeIn .35s ease both;
+  }
+  .card:hover { border-color: #383850; background: #18181f; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .card-ticker { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; }
+  .card-name { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .card-shares-label { font-size: 12px; color: var(--text2); margin-top: 1px; }
+
+  .card-price-block { text-align: center; }
+  .card-price { font-family: 'JetBrains Mono',monospace; font-size: 15px; font-weight: 500; color: var(--text); }
+  .card-price-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  .card-change {
+    text-align: center; font-family: 'JetBrains Mono',monospace;
+    font-size: 13px; font-weight: 500; padding: 4px 8px; border-radius: 6px;
+    white-space: nowrap; justify-self: center;
+  }
+  .card-change.up   { color: var(--up);   background: var(--up-bg); }
+  .card-change.down { color: var(--down); background: var(--down-bg); }
+  .card-change.flat { color: var(--text2); background: var(--surface2); }
+
+  .card-worth-block { text-align: center; }
+  .card-worth { font-family: 'JetBrains Mono',monospace; font-size: 16px; font-weight: 600; color: var(--text); }
+  .card-worth-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  .card-pl-block { text-align: right; }
+  .card-pl { font-family: 'JetBrains Mono',monospace; font-size: 15px; font-weight: 600; }
+  .card-pl.up   { color: var(--up); }
+  .card-pl.down { color: var(--down); }
+  .card-pl-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* ── Mobile stat pill (shown only on mobile) ── */
+  .card-stats { display: none; }
+
+  .skeleton {
+    background: linear-gradient(90deg,#1e1e2e 25%,#252535 50%,#1e1e2e 75%);
+    background-size: 200% 100%; border-radius: 4px; display: inline-block;
+    animation: skshimmer 1.5s infinite;
+  }
+  @keyframes skshimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .note { font-size: 12px; color: var(--text2); margin-top: 24px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 18px; }
+
+  /* ── Mobile layout ── */
+  @media(max-width:600px) {
+    body { padding: 20px 12px 48px; }
+
+    .header-left h1 { font-size: 20px; }
+    .total-card { padding: 18px 16px; }
+    .total-value { font-size: 28px; }
+    .total-change { font-size: 17px; }
+
+    /* Hide desktop column headers entirely */
+    .col-header { display: none; }
+
+    /* Cards become a 2-row layout: top row = ticker+name, bottom row = stats */
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px 16px;
+    }
+
+    /* Hide all desktop grid children */
+    .card-price-block,
+    .card-change,
+    .card-worth-block,
+    .card-pl-block { display: none; }
+
+    /* Top row inside card */
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    /* Bottom stats row */
+    .card-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 4px;
+      width: 100%;
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .stat-item { display: flex; flex-direction: column; align-items: flex-start; }
+    .stat-item:last-child { align-items: flex-end; }
+    .stat-item:nth-child(2), .stat-item:nth-child(3) { align-items: center; }
+
+    .stat-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; font-weight: 600; }
+    .stat-value { font-family: 'JetBrains Mono',monospace; font-size: 13px; font-weight: 600; color: var(--text); }
+    .stat-value.up   { color: var(--up); }
+    .stat-value.down { color: var(--down); }
+    .stat-value.skeleton { width: 50px; height: 14px; display: inline-block; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <h1>My Portfolio</h1>
+      <div class="sub" id="lastUpdate">Fetching prices…</div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge"><span class="dot"></span> LIVE</div>
+      <button class="refresh-btn" onclick="fetchAll()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="total-card">
+    <div>
+      <div class="total-label">Total Value</div>
+      <div class="total-value" id="totalValue">—</div>
+      <div class="total-status" id="totalSub">Loading positions…</div>
+    </div>
+    <div class="total-change-block">
+      <div class="total-label" style="text-align:right">Today</div>
+      <div class="total-change" id="totalChange">—</div>
+      <div class="total-change-label" id="totalChangeAbs"></div>
+    </div>
+  </div>
+
+  <div class="col-header">
+    <span>Asset</span><span>Price</span><span>Today</span><span>Value</span><span>P&amp;L</span>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="note" id="note">Prices fetched live via Yahoo Finance. Values shown in each asset's native currency; total is approximate in EUR. Auto-refreshes every 60s.</div>
+</div>
+
+<script>
+// Tickers are ordered by preference. priceRange is a sanity check based on known Revolut prices
+// to reject wrong ETFs being accidentally returned by the proxy.
+const HOLDINGS = [
+  {
+    ticker: 'NVDA', shares: (30/98.91) + (10/109.09), name: 'NVIDIA Corp',
+    yahooTickers: ['NVDA'],
+    priceRange: [50, 2000], displayCurrency: 'USD',
+    buyPrice: 40 / ((30/98.91) + (10/109.09)), // weighted avg
+  },
+  {
+    ticker: 'TSM', shares: 40/227.55, name: 'Taiwan Semiconductor',
+    yahooTickers: ['TSM'],
+    priceRange: [100, 800], displayCurrency: 'USD',
+    buyPrice: 227.55,
+  },
+  {
+    ticker: 'GOOGL', shares: 30/148.02, name: 'Alphabet Inc.',
+    yahooTickers: ['GOOGL'],
+    priceRange: [50, 500], displayCurrency: 'USD',
+    buyPrice: 148.02,
+  },
+  {
+    ticker: 'RHM', shares: 50/1149.50, name: 'Rheinmetall AG',
+    yahooTickers: ['RHM.DE'],
+    priceRange: [500, 3000], displayCurrency: 'EUR',
+    buyPrice: 1149.50,
+  },
+  {
+    ticker: 'ASME', shares: 35/949, name: 'ASML Holding',
+    yahooTickers: ['ASME.AS'],
+    priceRange: [400, 2000], displayCurrency: 'EUR',
+    buyPrice: 949,
+  },
+  {
+    ticker: 'MSFT', shares: 44/359.65, name: 'Microsoft Corp',
+    yahooTickers: ['MSFT'],
+    priceRange: [100, 1000], displayCurrency: 'USD',
+    buyPrice: 359.65,
+  },
+];
+
+const PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+  u => u,
+];
+
+function yahooUrl(t) {
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?interval=1d&range=2d`;
+}
+
+async function tryFetch(url) {
+  for (const px of PROXIES) {
+    try {
+      const res = await fetch(px(url), { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (!meta?.regularMarketPrice) continue;
+      return {
+        price: meta.regularMarketPrice,
+        prev: meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPrice,
+        currency: meta.currency || 'EUR',
+      };
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function fetchQuote(h) {
+  for (const yt of h.yahooTickers) {
+    const r = await tryFetch(yahooUrl(yt));
+    if (!r) continue;
+    if (r.price < h.priceRange[0] || r.price > h.priceRange[1]) {
+      console.warn(`${h.ticker}@${yt}: price ${r.price} outside range [${h.priceRange}], skipping`);
+      continue;
+    }
+    return { ...r, resolvedTicker: yt };
+  }
+  throw new Error('No valid price found for ' + h.ticker);
+}
+
+const fmtC = (n, cur) =>
+  new Intl.NumberFormat('nl-NL', {
+    style: 'currency', currency: cur || 'EUR',
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  }).format(n);
+const fmtPct = n => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+
+// Simple EUR conversion rates (approximate, for total only)
+// We'll also try to fetch live USD/EUR rate
+let usdToEur = 0.92; // fallback
+
+async function fetchUsdEur() {
+  try {
+    const r = await tryFetch(yahooUrl('EURUSD=X'));
+    // EURUSD=X gives EUR per USD — we want USD to EUR
+    if (r && r.price > 0) usdToEur = 1 / r.price; // EURUSD = how many USD per EUR, so 1/that = EUR per USD... 
+    // Actually EURUSD=X on Yahoo = USD per 1 EUR. So to convert USD->EUR: divide by price.
+    // Let's fetch USDEUR=X instead
+  } catch(_) {}
+  try {
+    const r2 = await tryFetch(yahooUrl('USD/EUR'));
+    if (r2 && r2.price > 0) usdToEur = r2.price;
+  } catch(_) {}
+}
+
+function buildCards() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  HOLDINGS.forEach((h, i) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.style.animationDelay = (i * 50) + 'ms';
+    el.innerHTML = `
+      <div class="card-top">
+        <div>
+          <div class="card-ticker">${h.ticker}</div>
+          <div class="card-name">${h.name}</div>
+          <div class="card-shares-label">${h.shares} shares</div>
+        </div>
+      </div>
+      <div class="card-price-block">
+        <div class="card-price skeleton" id="price-${h.ticker}" style="width:76px;height:17px;">&nbsp;</div>
+        <div class="card-price-label">per share</div>
+      </div>
+      <div class="card-change flat skeleton" id="change-${h.ticker}" style="width:60px;height:24px;">&nbsp;</div>
+      <div class="card-worth-block">
+        <div class="card-worth skeleton" id="worth-${h.ticker}" style="width:84px;height:19px;">&nbsp;</div>
+        <div class="card-worth-label">position</div>
+      </div>
+      <div class="card-pl-block">
+        <div class="card-pl skeleton" id="pl-${h.ticker}" style="width:72px;height:17px;">&nbsp;</div>
+        <div class="card-pl-label">vs buy</div>
+      </div>
+      <div class="card-stats">
+        <div class="stat-item">
+          <div class="stat-label">Price</div>
+          <div class="stat-value skeleton" id="m-price-${h.ticker}" style="width:50px;height:14px;">&nbsp;</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Today</div>
+          <div class="stat-value skeleton" id="m-change-${h.ticker}" style="width:50px;height:14px;">&nbsp;</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Value</div>
+          <div class="stat-value skeleton" id="m-worth-${h.ticker}" style="width:50px;height:14px;">&nbsp;</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">P&amp;L</div>
+          <div class="stat-value skeleton" id="m-pl-${h.ticker}" style="width:50px;height:14px;">&nbsp;</div>
+        </div>
+      </div>`;
+    grid.appendChild(el);
+  });
+}
+
+async function fetchAll() {
+  document.getElementById('lastUpdate').textContent = 'Refreshing…';
+
+  // Fetch USD/EUR rate for total calculation
+  let eurPerUsd = usdToEur;
+  try {
+    const fx = await tryFetch(yahooUrl('EURUSD=X'));
+    // EURUSD=X = how many USD buys 1 EUR. So USD→EUR = 1/price
+    if (fx && fx.price > 0) eurPerUsd = 1 / fx.price;
+  } catch(_) {}
+
+  let totalEur = 0, totalPrevEur = 0, loaded = 0, failed = [];
+  const settled = await Promise.allSettled(HOLDINGS.map(fetchQuote));
+
+  settled.forEach((res, i) => {
+    const h   = HOLDINGS[i];
+    const pe  = document.getElementById('price-'  + h.ticker);
+    const ce  = document.getElementById('change-' + h.ticker);
+    const we  = document.getElementById('worth-'  + h.ticker);
+    const ple = document.getElementById('pl-'     + h.ticker);
+    const mpe  = document.getElementById('m-price-'  + h.ticker);
+    const mce  = document.getElementById('m-change-' + h.ticker);
+    const mwe  = document.getElementById('m-worth-'  + h.ticker);
+    const mple = document.getElementById('m-pl-'     + h.ticker);
+
+    if (res.status === 'fulfilled') {
+      const { price, prev, currency } = res.value;
+      const worth     = price * h.shares;
+      const prevWorth = prev  * h.shares;
+      const pct    = ((price - prev) / prev) * 100;
+      const plPct  = ((price - h.buyPrice) / h.buyPrice) * 100;
+
+      const toEur = currency === 'USD' ? eurPerUsd : 1;
+      totalEur     += worth     * toEur;
+      totalPrevEur += prevWorth * toEur;
+      loaded++;
+
+      const todayCls = pct > 0.005 ? 'up' : pct < -0.005 ? 'down' : 'flat';
+      const plCls    = plPct >= 0 ? 'up' : 'down';
+
+      // Desktop
+      pe.className = 'card-price'; pe.style = ''; pe.textContent = fmtC(price, currency);
+      ce.className = `card-change ${todayCls}`; ce.style = ''; ce.textContent = fmtPct(pct);
+      we.className = 'card-worth'; we.style = ''; we.textContent = fmtC(worth, currency);
+      ple.className = `card-pl ${plCls}`; ple.style = ''; ple.textContent = fmtPct(plPct);
+
+      // Mobile
+      mpe.className = 'stat-value'; mpe.style = ''; mpe.textContent = fmtC(price, currency);
+      mce.className = `stat-value ${todayCls}`; mce.style = ''; mce.textContent = fmtPct(pct);
+      mwe.className = 'stat-value'; mwe.style = ''; mwe.textContent = fmtC(worth, currency);
+      mple.className = `stat-value ${plCls}`; mple.style = ''; mple.textContent = fmtPct(plPct);
+
+    } else {
+      pe.className = 'card-price'; pe.style = 'color:var(--down);font-size:12px;'; pe.textContent = 'N/A';
+      ce.className = 'card-change flat'; ce.style = ''; ce.textContent = '—';
+      we.className = 'card-worth'; we.style = 'color:var(--text2)'; we.textContent = '—';
+      ple.className = 'card-pl'; ple.style = 'color:var(--text2)'; ple.textContent = '—';
+      mpe.className = 'stat-value'; mpe.style = 'color:var(--down)'; mpe.textContent = 'N/A';
+      mce.className = 'stat-value'; mce.style = 'color:var(--text2)'; mce.textContent = '—';
+      mwe.className = 'stat-value'; mwe.style = 'color:var(--text2)'; mwe.textContent = '—';
+      mple.className = 'stat-value'; mple.style = 'color:var(--text2)'; mple.textContent = '—';
+      failed.push(h.ticker);
+    }
+  });
+
+  if (loaded > 0) {
+    const pct = ((totalEur - totalPrevEur) / totalPrevEur) * 100;
+    const abs = totalEur - totalPrevEur;
+    document.getElementById('totalValue').textContent = fmtC(totalEur, 'EUR');
+    document.getElementById('totalSub').textContent =
+      `${loaded} of ${HOLDINGS.length} positions` + (failed.length ? ` · failed: ${failed.join(', ')}` : ' · all OK');
+    const tc = document.getElementById('totalChange');
+    const ta = document.getElementById('totalChangeAbs');
+    tc.textContent = fmtPct(pct);
+    tc.style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
+    ta.textContent = (abs >= 0 ? '+' : '') + fmtC(abs, 'EUR') + ' today';
+    ta.style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
+  } else {
+    document.getElementById('totalValue').textContent = '—';
+    document.getElementById('totalSub').textContent = 'Could not load prices — check network / CORS.';
+    document.getElementById('totalChange').textContent = '—';
+  }
+
+  const now = new Date();
+  document.getElementById('lastUpdate').textContent =
+    `Updated ${now.toLocaleTimeString('nl-NL')} · refreshes every 60s`;
+}
+
+buildCards();
+fetchAll();
+setInterval(fetchAll, 60_000);
+</script>
+</body>
+</html>
