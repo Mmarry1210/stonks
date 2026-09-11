@@ -220,14 +220,12 @@
 </div>
 
 <script>
-// Tickers are ordered by preference. priceRange is a sanity check based on known Revolut prices
-// to reject wrong ETFs being accidentally returned by the proxy.
 const HOLDINGS = [
   {
     ticker: 'NVDA', shares: (30/98.91) + (10/109.09), name: 'NVIDIA Corp',
     yahooTickers: ['NVDA'],
     priceRange: [50, 2000], displayCurrency: 'USD',
-    buyPrice: 40 / ((30/98.91) + (10/109.09)), // weighted avg
+    buyPrice: 40 / ((30/98.91) + (10/109.09)),
   },
   {
     ticker: 'TSM', shares: 40/227.55, name: 'Taiwan Semiconductor',
@@ -256,7 +254,7 @@ const HOLDINGS = [
   {
     ticker: 'ASME', shares: (35/949) + (50/1591.2), name: 'ASML Holding',
     yahooTickers: ['ASME.DE'],
-    priceRange: [400, 2000], displayCurrency: 'EUR',
+    priceRange: [400, 2500], displayCurrency: 'EUR',
     buyPrice: 85 / ((35/949) + (50/1591.2)),
   },
   {
@@ -270,6 +268,12 @@ const HOLDINGS = [
     yahooTickers: ['IONQ'],
     priceRange: [5, 500], displayCurrency: 'USD',
     buyPrice: 54.73,
+  },
+  {
+    ticker: 'INFQ', shares: 75/12.05, name: 'Infleqtion Inc',
+    yahooTickers: ['INFQ'],
+    priceRange: [2, 100], displayCurrency: 'USD',
+    buyPrice: 12.05,
   },
   {
     ticker: 'TTWO', shares: 50/243.94, name: 'Take-Two Interactive',
@@ -301,75 +305,19 @@ const HOLDINGS = [
     priceRange: [200, 1200], displayCurrency: 'USD',
     buyPrice: 492.50,
   },
-  {
-    ticker: 'INFQ', shares: 75/12.05, name: 'Infleqtion Inc',
-    yahooTickers: ['INFQ'],
-    priceRange: [2, 100], displayCurrency: 'USD',
-    buyPrice: 12.05,
-  },
 ];
 
 const PROXIES = [
-  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`,
-  u => u // Fallback for local web-security-disabled testing
+  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`, // <-- PASTE WORKER URL HERE
+  u => u
 ];
 
-function yahooUrl(t) {
-  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?interval=1d&range=2d`;
-}
-
-// Replace tryFetch and fetchQuote with this batch function
-async function fetchBatchQuotes(holdings) {
-  // Extract the first preferred Yahoo ticker for each holding
-  const symbols = holdings.map(h => h.yahooTickers[0]).join(',');
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
-  
-  for (const px of PROXIES) {
-    try {
-      const res = await fetch(px(url), { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      
-      const quotes = data?.quoteResponse?.result;
-      if (!quotes || quotes.length === 0) continue;
-      
-      // Map the returned data back to our holdings
-      return quotes.reduce((acc, quote) => {
-        acc[quote.symbol] = {
-          price: quote.regularMarketPrice,
-          prev: quote.regularMarketPreviousClose,
-          currency: quote.currency || 'EUR'
-        };
-        return acc;
-      }, {});
-    } catch (_) {}
-  }
-  return null;
-}
 const fmtC = (n, cur) =>
   new Intl.NumberFormat('nl-NL', {
     style: 'currency', currency: cur || 'EUR',
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(n);
 const fmtPct = n => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
-
-// Simple EUR conversion rates (approximate, for total only)
-// We'll also try to fetch live USD/EUR rate
-let usdToEur = 0.92; // fallback
-
-async function fetchUsdEur() {
-  try {
-    const r = await tryFetch(yahooUrl('EURUSD=X'));
-    // EURUSD=X gives EUR per USD — we want USD to EUR
-    if (r && r.price > 0) usdToEur = 1 / r.price; // EURUSD = how many USD per EUR, so 1/that = EUR per USD... 
-    // Actually EURUSD=X on Yahoo = USD per 1 EUR. So to convert USD->EUR: divide by price.
-    // Let's fetch USDEUR=X instead
-  } catch(_) {}
-  try {
-    const r2 = await tryFetch(yahooUrl('USD/EUR'));
-    if (r2 && r2.price > 0) usdToEur = r2.price;
-  } catch(_) {}
-}
 
 function buildCards() {
   const grid = document.getElementById('grid');
@@ -378,12 +326,13 @@ function buildCards() {
     const el = document.createElement('div');
     el.className = 'card';
     el.style.animationDelay = (i * 50) + 'ms';
+    // Cleaned up the shares display to prevent massive float decimals
     el.innerHTML = `
       <div class="card-top">
         <div>
           <div class="card-ticker">${h.ticker}</div>
           <div class="card-name">${h.name}</div>
-          <div class="card-shares-label">${h.shares} shares</div>
+          <div class="card-shares-label">${h.shares.toFixed(4)} shares</div>
         </div>
       </div>
       <div class="card-price-block">
@@ -424,56 +373,75 @@ function buildCards() {
 async function fetchAll() {
   document.getElementById('lastUpdate').textContent = 'Refreshing…';
 
-  // Fetch USD/EUR rate for total calculation
-  let eurPerUsd = usdToEur;
-  try {
-    const fx = await tryFetch(yahooUrl('EURUSD=X'));
-    // EURUSD=X = how many USD buys 1 EUR. So USD→EUR = 1/price
-    if (fx && fx.price > 0) eurPerUsd = 1 / fx.price;
-  } catch(_) {}
+  // 1. Fetch ALL prices + EUR/USD in a single network request
+  const allSymbols = [...HOLDINGS.map(h => h.yahooTickers[0]), 'EURUSD=X'];
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(allSymbols.join(','))}`;
+  
+  let quotesData = null;
+  for (const px of PROXIES) {
+    try {
+      const res = await fetch(px(url), { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const quotes = data?.quoteResponse?.result;
+      
+      if (quotes && quotes.length > 0) {
+        quotesData = quotes.reduce((acc, q) => {
+          acc[q.symbol] = {
+            price: q.regularMarketPrice,
+            prev: q.regularMarketPreviousClose,
+            currency: q.currency || 'EUR'
+          };
+          return acc;
+        }, {});
+        break; // Successfully fetched, stop trying fallback proxies
+      }
+    } catch (_) {}
+  }
 
+  // 2. Map the data back to the UI
   let totalEur = 0, totalPrevEur = 0, totalInvestedEur = 0, loaded = 0, failed = [];
-  const settled = await Promise.allSettled(HOLDINGS.map(fetchQuote));
+  let eurPerUsd = (quotesData && quotesData['EURUSD=X']?.price > 0) ? (1 / quotesData['EURUSD=X'].price) : 0.92;
 
-  settled.forEach((res, i) => {
-    const h   = HOLDINGS[i];
-    const pe  = document.getElementById('price-'  + h.ticker);
-    const ce  = document.getElementById('change-' + h.ticker);
-    const we  = document.getElementById('worth-'  + h.ticker);
-    const ple = document.getElementById('pl-'     + h.ticker);
-    const mpe  = document.getElementById('m-price-'  + h.ticker);
-    const mce  = document.getElementById('m-change-' + h.ticker);
-    const mwe  = document.getElementById('m-worth-'  + h.ticker);
-    const mple = document.getElementById('m-pl-'     + h.ticker);
+  HOLDINGS.forEach(h => {
+    const yt = h.yahooTickers[0];
+    const quote = quotesData ? quotesData[yt] : null;
 
-    if (res.status === 'fulfilled') {
-      const { price, prev, currency } = res.value;
-      const worth     = price * h.shares;
-      const prevWorth = prev  * h.shares;
-      const pct    = ((price - prev) / prev) * 100;
-      const plPct  = ((price - h.buyPrice) / h.buyPrice) * 100;
+    const pe = document.getElementById('price-' + h.ticker);
+    const ce = document.getElementById('change-' + h.ticker);
+    const we = document.getElementById('worth-' + h.ticker);
+    const ple = document.getElementById('pl-' + h.ticker);
+    const mpe = document.getElementById('m-price-' + h.ticker);
+    const mce = document.getElementById('m-change-' + h.ticker);
+    const mwe = document.getElementById('m-worth-' + h.ticker);
+    const mple = document.getElementById('m-pl-' + h.ticker);
 
+    if (quote && quote.price >= h.priceRange[0] && quote.price <= h.priceRange[1]) {
+      const { price, prev, currency } = quote;
+      const worth = price * h.shares;
+      const prevWorth = prev * h.shares;
+      const pct = prev ? ((price - prev) / prev) * 100 : 0;
+      const plPct = ((price - h.buyPrice) / h.buyPrice) * 100;
       const toEur = currency === 'USD' ? eurPerUsd : 1;
-      totalEur         += worth             * toEur;
-      totalPrevEur     += prevWorth         * toEur;
+
+      totalEur += worth * toEur;
+      totalPrevEur += prevWorth * toEur;
       totalInvestedEur += (h.buyPrice * h.shares) * toEur;
       loaded++;
 
       const todayCls = pct > 0.005 ? 'up' : pct < -0.005 ? 'down' : 'flat';
-      const plCls    = plPct >= 0 ? 'up' : 'down';
+      const plCls = plPct >= 0 ? 'up' : 'down';
 
       // Desktop
       pe.className = 'card-price'; pe.style = ''; pe.textContent = fmtC(price, currency);
       ce.className = `card-change ${todayCls}`; ce.style = ''; ce.textContent = fmtPct(pct);
       we.className = 'card-worth'; we.style = ''; we.textContent = fmtC(worth, currency);
       ple.className = `card-pl ${plCls}`; ple.style = ''; ple.textContent = fmtPct(plPct);
-
       // Mobile
       mpe.className = 'stat-value'; mpe.style = ''; mpe.textContent = fmtC(price, currency);
       mce.className = `stat-value ${todayCls}`; mce.style = ''; mce.textContent = fmtPct(pct);
       mwe.className = 'stat-value'; mwe.style = ''; mwe.textContent = fmtC(worth, currency);
       mple.className = `stat-value ${plCls}`; mple.style = ''; mple.textContent = fmtPct(plPct);
-
     } else {
       pe.className = 'card-price'; pe.style = 'color:var(--down);font-size:12px;'; pe.textContent = 'N/A';
       ce.className = 'card-change flat'; ce.style = ''; ce.textContent = '—';
@@ -488,12 +456,12 @@ async function fetchAll() {
   });
 
   if (loaded > 0) {
-    const pct = ((totalEur - totalPrevEur) / totalPrevEur) * 100;
+    const pct = totalPrevEur > 0 ? ((totalEur - totalPrevEur) / totalPrevEur) * 100 : 0;
     const abs = totalEur - totalPrevEur;
     document.getElementById('totalValue').textContent = fmtC(totalEur, 'EUR');
     document.getElementById('totalInvested').textContent = fmtC(totalInvestedEur, 'EUR');
-    document.getElementById('totalSub').textContent =
-      `${loaded} of ${HOLDINGS.length} positions` + (failed.length ? ` · failed: ${failed.join(', ')}` : ' · all OK');
+    document.getElementById('totalSub').textContent = `${loaded} of ${HOLDINGS.length} positions` + (failed.length ? ` · failed: ${failed.join(', ')}` : ' · all OK');
+    
     const tc = document.getElementById('totalChange');
     const ta = document.getElementById('totalChangeAbs');
     tc.textContent = fmtPct(pct);
@@ -507,8 +475,7 @@ async function fetchAll() {
   }
 
   const now = new Date();
-  document.getElementById('lastUpdate').textContent =
-    `Updated ${now.toLocaleTimeString('nl-NL')} · refreshes every 60s`;
+  document.getElementById('lastUpdate').textContent = `Updated ${now.toLocaleTimeString('nl-NL')} · refreshes every 60s`;
 }
 
 buildCards();
