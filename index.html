@@ -308,10 +308,41 @@ const HOLDINGS = [
 ];
 
 const PROXIES = [
-  // 🔴🔴🔴 PASTE YOUR EXACT CLOUDFLARE WORKER URL ON THE LINE BELOW 🔴🔴🔴
-  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`,
+  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`, 
   u => u
 ];
+
+function yahooUrl(t) {
+  return `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?interval=1d&range=2d`;
+}
+
+async function tryFetch(url) {
+  for (const px of PROXIES) {
+    try {
+      const res = await fetch(px(url), { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (!meta?.regularMarketPrice) continue;
+      return {
+        price: meta.regularMarketPrice,
+        prev: meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPrice,
+        currency: meta.currency || 'EUR',
+      };
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function fetchQuote(h) {
+  for (const yt of h.yahooTickers) {
+    const r = await tryFetch(yahooUrl(yt));
+    if (!r) continue;
+    if (r.price < h.priceRange[0] || r.price > h.priceRange[1]) continue;
+    return { ...r, resolvedTicker: yt };
+  }
+  throw new Error('No valid price found');
+}
 
 const fmtC = (n, cur) =>
   new Intl.NumberFormat('nl-NL', {
@@ -373,38 +404,17 @@ function buildCards() {
 async function fetchAll() {
   document.getElementById('lastUpdate').textContent = 'Refreshing…';
 
-  const allSymbols = [...HOLDINGS.map(h => h.yahooTickers[0]), 'EURUSD=X'];
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(allSymbols.join(','))}`;
-  
-  let quotesData = null;
-  for (const px of PROXIES) {
-    try {
-      const res = await fetch(px(url), { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const quotes = data?.quoteResponse?.result;
-      
-      if (quotes && quotes.length > 0) {
-        quotesData = quotes.reduce((acc, q) => {
-          acc[q.symbol] = {
-            price: q.regularMarketPrice,
-            prev: q.regularMarketPreviousClose,
-            currency: q.currency || 'EUR'
-          };
-          return acc;
-        }, {});
-        break; 
-      }
-    } catch (_) {}
-  }
+  let eurPerUsd = 0.92;
+  try {
+    const fx = await tryFetch(yahooUrl('EURUSD=X'));
+    if (fx && fx.price > 0) eurPerUsd = 1 / fx.price;
+  } catch(_) {}
+
+  await new Promise(r => setTimeout(r, 500));
 
   let totalEur = 0, totalPrevEur = 0, totalInvestedEur = 0, loaded = 0, failed = [];
-  let eurPerUsd = (quotesData && quotesData['EURUSD=X']?.price > 0) ? (1 / quotesData['EURUSD=X'].price) : 0.92;
 
-  HOLDINGS.forEach(h => {
-    const yt = h.yahooTickers[0];
-    const quote = quotesData ? quotesData[yt] : null;
-
+  for (const h of HOLDINGS) {
     const pe = document.getElementById('price-' + h.ticker);
     const ce = document.getElementById('change-' + h.ticker);
     const we = document.getElementById('worth-' + h.ticker);
@@ -414,8 +424,10 @@ async function fetchAll() {
     const mwe = document.getElementById('m-worth-' + h.ticker);
     const mple = document.getElementById('m-pl-' + h.ticker);
 
-    if (quote && quote.price >= h.priceRange[0] && quote.price <= h.priceRange[1]) {
+    try {
+      const quote = await fetchQuote(h);
       const { price, prev, currency } = quote;
+      
       const worth = price * h.shares;
       const prevWorth = prev * h.shares;
       const pct = prev ? ((price - prev) / prev) * 100 : 0;
@@ -438,7 +450,8 @@ async function fetchAll() {
       mce.className = `stat-value ${todayCls}`; mce.style = ''; mce.textContent = fmtPct(pct);
       mwe.className = 'stat-value'; mwe.style = ''; mwe.textContent = fmtC(worth, currency);
       mple.className = `stat-value ${plCls}`; mple.style = ''; mple.textContent = fmtPct(plPct);
-    } else {
+
+    } catch (e) {
       pe.className = 'card-price'; pe.style = 'color:var(--down);font-size:12px;'; pe.textContent = 'N/A';
       ce.className = 'card-change flat'; ce.style = ''; ce.textContent = '—';
       we.className = 'card-worth'; we.style = 'color:var(--text2)'; we.textContent = '—';
@@ -449,7 +462,9 @@ async function fetchAll() {
       mple.className = 'stat-value'; mple.style = 'color:var(--text2)'; mple.textContent = '—';
       failed.push(h.ticker);
     }
-  });
+
+    await new Promise(r => setTimeout(r, 500));
+  }
 
   if (loaded > 0) {
     const pct = totalPrevEur > 0 ? ((totalEur - totalPrevEur) / totalPrevEur) * 100 : 0;
