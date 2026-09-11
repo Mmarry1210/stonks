@@ -304,10 +304,8 @@ const HOLDINGS = [
 ];
 
 const PROXIES = [
-  u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u => u,
+  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`,
+  u => u // Fallback for local web-security-disabled testing
 ];
 
 function yahooUrl(t) {
