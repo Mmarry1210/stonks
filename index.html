@@ -308,7 +308,8 @@ const HOLDINGS = [
 ];
 
 const PROXIES = [
-  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`, // <-- PASTE WORKER URL HERE
+  // 🔴🔴🔴 PASTE YOUR EXACT CLOUDFLARE WORKER URL ON THE LINE BELOW 🔴🔴🔴
+  u => `https://stock-proxy.mariavdo1210.workers.dev/?url=${encodeURIComponent(u)}`,
   u => u
 ];
 
@@ -326,7 +327,6 @@ function buildCards() {
     const el = document.createElement('div');
     el.className = 'card';
     el.style.animationDelay = (i * 50) + 'ms';
-    // Cleaned up the shares display to prevent massive float decimals
     el.innerHTML = `
       <div class="card-top">
         <div>
@@ -373,7 +373,6 @@ function buildCards() {
 async function fetchAll() {
   document.getElementById('lastUpdate').textContent = 'Refreshing…';
 
-  // 1. Fetch ALL prices + EUR/USD in a single network request
   const allSymbols = [...HOLDINGS.map(h => h.yahooTickers[0]), 'EURUSD=X'];
   const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(allSymbols.join(','))}`;
   
@@ -394,12 +393,11 @@ async function fetchAll() {
           };
           return acc;
         }, {});
-        break; // Successfully fetched, stop trying fallback proxies
+        break; 
       }
     } catch (_) {}
   }
 
-  // 2. Map the data back to the UI
   let totalEur = 0, totalPrevEur = 0, totalInvestedEur = 0, loaded = 0, failed = [];
   let eurPerUsd = (quotesData && quotesData['EURUSD=X']?.price > 0) ? (1 / quotesData['EURUSD=X'].price) : 0.92;
 
@@ -432,12 +430,10 @@ async function fetchAll() {
       const todayCls = pct > 0.005 ? 'up' : pct < -0.005 ? 'down' : 'flat';
       const plCls = plPct >= 0 ? 'up' : 'down';
 
-      // Desktop
       pe.className = 'card-price'; pe.style = ''; pe.textContent = fmtC(price, currency);
       ce.className = `card-change ${todayCls}`; ce.style = ''; ce.textContent = fmtPct(pct);
       we.className = 'card-worth'; we.style = ''; we.textContent = fmtC(worth, currency);
       ple.className = `card-pl ${plCls}`; ple.style = ''; ple.textContent = fmtPct(plPct);
-      // Mobile
       mpe.className = 'stat-value'; mpe.style = ''; mpe.textContent = fmtC(price, currency);
       mce.className = `stat-value ${todayCls}`; mce.style = ''; mce.textContent = fmtPct(pct);
       mwe.className = 'stat-value'; mwe.style = ''; mwe.textContent = fmtC(worth, currency);
